@@ -1,13 +1,72 @@
 #!/bin/sh
 set -e
-# originally taken from https://github.com/air-verse/air/blob/106841627202c3446c0cc521b320638ce3bcf352/install.sh
 
+# Setup INSTALL_CMD & PKG_MGR_CMD
+if type apt-get > /dev/null 2>&1; then
+    PKG_MGR_CMD=apt-get
+    INSTALL_CMD="${PKG_MGR_CMD} -y install --no-install-recommends"
+elif type microdnf > /dev/null 2>&1; then
+    PKG_MGR_CMD=microdnf
+    INSTALL_CMD="${PKG_MGR_CMD} ${INSTALL_CMD_ADDL_REPOS} -y install --refresh --best --nodocs --noplugins --setopt=install_weak_deps=0"
+elif type dnf > /dev/null 2>&1; then
+    PKG_MGR_CMD=dnf
+    INSTALL_CMD="${PKG_MGR_CMD} ${INSTALL_CMD_ADDL_REPOS} -y install --refresh --best --nodocs --noplugins --setopt=install_weak_deps=0"
+else
+    PKG_MGR_CMD=yum
+    INSTALL_CMD="${PKG_MGR_CMD} ${INSTALL_CMD_ADDL_REPOS} -y install --noplugins --setopt=install_weak_deps=0"
+fi
+
+# Checks if packages are installed and installs them if not
+check_packages() {
+  if [ ${PKG_MGR_CMD} = "apt-get" ]; then
+    if ! dpkg -s "$@" > /dev/null 2>&1; then
+        pkg_mgr_update
+        ${INSTALL_CMD} "$@"
+    fi
+  else
+    if ! rpm -q "$@" > /dev/null 2>&1; then
+      pkg_mgr_update
+      ${INSTALL_CMD} "$@"
+    fi
+  fi
+}
+
+
+pkg_mgr_update() {
+    if [ ${PKG_MGR_CMD} = "apt-get" ]; then
+        if [ "$(find /var/lib/apt/lists/* | wc -l)" = "0" ]; then
+            echo "Running apt-get update..."
+            ${PKG_MGR_CMD} update -y
+        fi
+    elif [ ${PKG_MGR_CMD} = "microdnf" ]; then
+        if [ "$(ls /var/cache/yum/* 2>/dev/null | wc -l)" = 0 ]; then
+            echo "Running ${PKG_MGR_CMD} makecache ..."
+            ${PKG_MGR_CMD} makecache
+        fi
+    else
+        if [ "$(ls /var/cache/${PKG_MGR_CMD}/* 2>/dev/null | wc -l)" = 0 ]; then
+            echo "Running ${PKG_MGR_CMD} check-update ..."
+            set +e
+            ${PKG_MGR_CMD} check-update
+            rc=$?
+            if [ $rc != 0 ] && [ $rc != 100 ]; then
+                exit 1
+            fi
+            set -e
+        fi
+    fi
+}
+
+# originally taken from https://github.com/air-verse/air/blob/106841627202c3446c0cc521b320638ce3bcf352/install.sh
+#
 parse_args() {
   #BINDIR is ./bin unless set be ENV
   # over-ridden by flag below
 
   BINDIR=${BINDIR:-/usr/local/bin}
-  VERSION=${VERSION:-latest}
+  if [ "${VERSION:-latest}" = "latest" ]; then
+    VERSION=
+  fi
 }
 # this function wraps all the destructive operations
 # if a curl|bash cuts off the end of the script due to
@@ -209,6 +268,7 @@ http_download_curl() {
   local_file=$1
   source_url=$2
   header=$3
+  code=$(curl -vL -o /dev/null "$source_url")
   if [ -z "$header" ]; then
     code=$(curl -w '%{http_code}' -sL -o "$local_file" "$source_url")
   else
@@ -319,6 +379,8 @@ log_prefix() {
 }
 PLATFORM="${OS}/${ARCH}"
 GITHUB_DOWNLOAD=https://github.com/${OWNER}/${REPO}/releases/download
+
+check_packages curl ca-certificates
 
 uname_os_check "$OS"
 uname_arch_check "$ARCH"
