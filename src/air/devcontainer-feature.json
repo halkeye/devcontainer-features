@@ -3,7 +3,16 @@
   "id": "air",
   "version": "1.0.0",
   "description": "A feature to install the golang auto reloader",
-  "options": {},
+  "options": {
+    "version": {
+      "type": "string",
+      "proposals": [
+        "latest"
+      ],
+      "default": "latest",
+      "description": "Select or enter an air CLI version from https://github.com/air-verse/air/releases."
+    }
+  },
   "installsAfter": [
     "ghcr.io/devcontainers/features/common-utils"
   ]
