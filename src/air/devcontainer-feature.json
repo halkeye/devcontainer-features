@@ -1,0 +1,10 @@
+{
+  "name": "Golang autoreloader",
+  "id": "air",
+  "version": "1.0.0",
+  "description": "A feature to install the golang auto reloader",
+  "options": {},
+  "installsAfter": [
+    "ghcr.io/devcontainers/features/common-utils"
+  ]
+}
